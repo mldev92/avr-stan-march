@@ -7,6 +7,7 @@ Agent Voice Response infrastructure with IPHost SIP trunk integration for Moldov
 - Inbound calls from PSTN routed to AVR voice agent
 - Outbound calls initiated by voice agent to PSTN numbers
 - IPHost SIP trunk integration (local Moldova numbers)
+- Simple CLI tools for initiating calls
 
 ## Prerequisites
 
@@ -53,15 +54,30 @@ Calls to your DID number are automatically routed to the AVR voice agent.
 
 ### Outbound Calls
 
-Use the avr-ami API to originate calls:
+#### Option 1: Using the shell script (recommended)
+
+```bash
+./call.sh 068155658
+```
+
+#### Option 2: Using Python script
+
+```bash
+python3 call.py 068155658
+```
+
+#### Option 3: Direct API call
 
 ```bash
 curl -X POST http://localhost:6006/originate \
   -H "Content-Type: application/json" \
-  -d '{"channel": "PJSIP/068XXXXXXX@iphost-endpoint", "exten": "5001", "context": "demo"}'
+  -d '{"channel": "PJSIP/068155658@iphost-endpoint", "exten": "5001", "context": "demo", "priority": 1, "callerid": "22011180"}'
 ```
 
-Replace `068XXXXXXX` with the target Moldova mobile number (local format).
+#### Option 4: From extension 1000 (softphone)
+
+Dial `9` + phone number from your registered softphone:
+- `9068155658` - calls 068155658 via PSTN
 
 ## Number Format
 
@@ -69,7 +85,10 @@ IPHost expects local Moldova format:
 - Local mobile: `068XXXXXXX` or `079XXXXXXX`
 - Local landline: `022XXXXXXX`
 
-The dialplan automatically converts international format to local format.
+The dialplan automatically converts:
+- `37368XXXXXXX` → `068XXXXXXX`
+- `0037368XXXXXXX` → `068XXXXXXX`
+- `+37368XXXXXXX` → `068XXXXXXX`
 
 ## Architecture
 
@@ -78,12 +97,29 @@ The dialplan automatically converts international format to local format.
 │   PSTN      │────▶│   Asterisk  │────▶│  AVR Core   │
 │  (IPHost)   │◀────│  (PJSIP)    │◀────│  (Agent)    │
 └─────────────┘     └─────────────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │   avr-ami   │
-                    │  (AMI API)  │
-                    └─────────────┘
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │   avr-ami   │
+                   │  (AMI API)  │
+                   └─────────────┘
+```
+
+### Call Flow
+
+**Inbound:**
+```
+GSM Caller → IPHost → Asterisk [from-pstn] → [avr] → AudioSocket → avr-core (Agent)
+```
+
+**Outbound (via API):**
+```
+HTTP POST /originate → avr-ami → AMI → Asterisk → IPHost → GSM Receiver
+```
+
+**Outbound (via softphone):**
+```
+Softphone (ext 1000) → dial 9XXXXXXX → [outbound-pstn] → IPHost → GSM Receiver
 ```
 
 ## Configuration Files
@@ -91,6 +127,28 @@ The dialplan automatically converts international format to local format.
 - `asterisk/conf/pjsip.conf` - SIP trunk and endpoint configuration
 - `asterisk/conf/extensions.conf` - Dialplan for call routing
 - `asterisk/conf/manager.conf` - AMI configuration
+
+## Troubleshooting
+
+### Check trunk registration
+```bash
+docker exec avr-asterisk asterisk -rx "pjsip show registrations"
+```
+
+### Check active channels
+```bash
+docker exec avr-asterisk asterisk -rx "core show channels"
+```
+
+### View live logs
+```bash
+docker logs -f avr-asterisk
+```
+
+### Restart services
+```bash
+docker compose -f docker-compose-openai-realtime.yml restart avr-asterisk avr-ami
+```
 
 ## License
 
