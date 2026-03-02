@@ -1,0 +1,25 @@
+[outbound]
+; Outbound dialing context for dialer service
+; This context is used when initiating calls via AMI Originate
+; Include this in your extensions.conf: #include "extensions-outbound.conf"
+
+exten => _X.,1,NoOp(Outbound call to ${EXTEN})
+ same => n,Set(UUID=${SHELL(uuidgen | tr -d '\n')})
+ same => n,Set(CALLERID(num)=${CALLERID_NUM})
+ same => n,Set(CALLERID(name)=${CALLERID_NAME})
+ same => n,UserEvent(CallStart,Direction: outbound,CallUUID: ${UUID},CalledNumber: ${EXTEN},CampaignID: ${CampaignID},NumberID: ${NumberID})
+ same => n,Dial(PJSIP/${EXTEN}@trunk,30,tT)
+ same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?answered:notanswered)
+
+answered:
+ same => n,NoOp(Call answered)
+ same => n,UserEvent(CallAnswered,CallUUID: ${UUID},CampaignID: ${CampaignID},NumberID: ${NumberID})
+ same => n,GoSub(avr,s,1(avr-core:5001))
+ same => n,UserEvent(CallEnd,CallUUID: ${UUID},Status: completed,Duration: ${CDR(duration)})
+ same => n,Hangup()
+
+notanswered:
+ same => n,NoOp(Call not answered: ${DIALSTATUS})
+ same => n,UserEvent(CallNotAnswered,CallUUID: ${UUID},Status: ${DIALSTATUS},CampaignID: ${CampaignID},NumberID: ${NumberID})
+ same => n,Hangup()
+

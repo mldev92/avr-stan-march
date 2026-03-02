@@ -6,6 +6,9 @@ ollama-web
 traefik
 .env
 .keys
+
+# Sensitive config files with passwords/credentials
+asterisk/conf/pjsip.conf
 docker-compose-*.yml
 !docker-compose-app.yml
 !docker-compose-anthropic.yml
